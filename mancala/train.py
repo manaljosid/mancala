@@ -9,11 +9,12 @@ from torch import Tensor
 from torch.autograd import Variable
 
 from mancala.groups.group_random.action import action as random_action
-from mancala.game import initial_board, legal_actions, is_finished, play_turn, winner, ActionFunction, copy_board
+from mancala.game import initial_board, legal_actions, is_finished, play_turn, winner, ActionFunction, copy_board, board_repr
 
 device = 'cpu'
 nh = 10
-nx = (2*7+2)
+# nx needs to match the length of the encoded form
+nx = (48*14+2)
 val_last_action = 0.0
 
 w1 = Variable(0.1*torch.randn(nh,nx, device = device, dtype=torch.float), requires_grad = True)
@@ -104,17 +105,17 @@ def train():
     start = time.time()
     while True:
         print("Testing after " + str(1000 * round) + " rounds (" + str((time.time() - start)) + " sec)")
-        testCurrentPlayer(40, learning_action, random_action)
+        testCurrentPlayer(20, learning_action, random_action)
         round +=1
         for i in range(1000):
-            game(learning_action, random_action, True)
+            game(learning_action, random_action, True, False)
 
 def testCurrentPlayer(it, play0, play1):
     p0 = 0
     p1 = 0
     d = 0
     for i in range(it):
-        w = game(play0, play1, False)
+        w = game(play0, play1, False, True)
         if w == 0:
             p0 += 1
         elif w == 1:
@@ -124,13 +125,28 @@ def testCurrentPlayer(it, play0, play1):
     print("p0 win: " + str(p0/it) + " p1 win: " + str(p1/it) + " draw: " + str(d/it))
 
 def encode(board, player):
+    return onehot_encoding(board,player)
+
+def norm_raw_encoding(board, player):
     state = [i / 48.0 for i in board]
     state.append(player)
     state.append((board[6] - board[13])/48)
     return np.array(state)
 
+def onehot_encoding(board, player):
+    state = []
+    slot_enc = [0 for i in range(48)]
+    for slot in board:
+        state.extend(slot_enc)
+        if slot > 0:
+            state[-slot] = 1
+    state.append(player)
+    state.append((board[6] - board[13]) / 48)
+    return np.array(state)
+
+
 def game(
-    group0: ActionFunction, group1: ActionFunction, enablelearning: bool
+    group0: ActionFunction, group1: ActionFunction, enablelearning: bool, doprint: bool
 ) -> int:
     Z_w1 = torch.zeros(w1.size(), device=device, dtype=torch.float)
     Z_b1 = torch.zeros(b1.size(), device=device, dtype=torch.float)
@@ -154,6 +170,8 @@ def game(
             learningPlayer = True
         try:
             player = play_turn(board, player, action)
+            if doprint:
+                print(board_repr(board, action))
             if is_finished(board):
                 w = winner(board)
                 if w == 0:
@@ -162,6 +180,8 @@ def game(
                     target = 0
                 else:
                     target = 0.5
+                if doprint:
+                    print("Winner was " + str(w))
             else:
                 if player == 0:
                     target = value_of_last_action()
