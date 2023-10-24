@@ -92,47 +92,65 @@ def play_turn(board: Board, player: Player, action: int) -> Player:
     #assert (
     #    sum(board) == TOTAL_SEEDS
     #), f"Illegal board on turn start. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
-    #assert action in legal_actions(board, player)
+    #assert action in legal_actions(
+    #    board, player
+    #), f"Illegal action: {action=} not in {legal_actions(board, player)=}"
+
     seeds = board[action]
     #assert seeds > 0, f"Illegal action, no seeds in pit chosen: {action=}, {seeds=}"
+
     board[action] = 0
     start = action + 1
+
     # Find the exclusive end index in the player's cycle.
     # It does not not necessarily correspond to the end index for the board,
     # because we skip the opponent's Mancala.
     end_idx = start + seeds
+
+    # Update pits
     player_cycle = CYCLES[player]
     for pit in player_cycle[start:end_idx]:
         # We don't need to worry about opposite Mancala since it is not in the cycle.
         board[pit] = board[pit] + 1
     #assert (
     #    sum(board) == TOTAL_SEEDS
-    #), f"Illegal board on after action. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
+    #), f"Illegal board after action. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
+
     end = player_cycle[end_idx - 1]  # inclusive end index on board.
-    #assert 0 <= end  < 14
+    assert 0 <= end < 14
 
     # If the last seed lands in the player's own Mancala, they get another turn.
     next_player = player if end == MANCALAS[player] else 1 - player
     if __debug__ and player == next_player:
         playback.info(f"  ++ PLAY AGAIN: end={end}")
 
-    # If the last seed lands in an empty pit on their side,
-    # they capture that seed and any seeds in the opposite pit,
+    # If the last seed lands in an empty pit on their side
+    # and there are seeds in the opposite pit,
+    # then the player captures that seed and all seeds in the opposite pit,
     # placing all of them in their Mancala.
     start_pit = player * SHIFT
-    if board[end] == 1 and ((start_pit) <= end < (start_pit + SHIFT)):
-        board[end] = 0
+    if board[end] == 1 and ((start_pit) <= end < (start_pit + 6)):
         opposite = 12 - end
         stolen = board[opposite]
-        if __debug__:
-            playback.info(f"  ++ CAPTURE: {end=}, {opposite=}, {stolen=}")
-        board[opposite] = 0
-        board[MANCALAS[player]] += stolen + 1
+        if stolen != 0:
+            "Capture!"
+            if __debug__:
+                playback.info(f"  ++ CAPTURE: {end=}, {opposite=}, {stolen=}")
+            board[end] = 0
+            board[opposite] = 0
+            board[MANCALAS[player]] += stolen + 1
+        else:
+            if __debug__:
+                playback.info(f"  ++ Potential capture but nothing in opposite pit: {end=}, {opposite=}, {stolen=}")
+            pass
     #assert (
     #    sum(board) == TOTAL_SEEDS
-    #), f"Illegal board on after capture. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
-
+    #), f"Illegal board after capture. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
     return next_player
+
+
+def still_going(board: Board) -> bool:
+    return any(board[AREA0]) and any(board[AREA1])
 
 
 def is_finished(board: Board) -> bool:
@@ -171,16 +189,14 @@ def winner(board) -> int:
 
 
 def copy_board(board: Board):
-    return array('i', board)
+    return array("i", board)
 
 
 def flip_board(board: Board) -> Board:
-    return array('i', board[7:] + board[:7])
+    return array("i", board[7:] + board[:7])
 
 
-def game(
-    group0: ActionFunction, group1: ActionFunction
-) -> int:
+def game(group0: ActionFunction, group1: ActionFunction) -> int:
     """Play one game of mancala
 
     Parameters
@@ -209,7 +225,7 @@ def game(
         logger.debug(f"Starting game at {dt.datetime.now()}")
 
     turn = 0
-    while not is_finished(board):
+    while still_going(board):
         turn += 1
         group = groups[player]
         possible_actions = legal_actions(board, player)
@@ -227,7 +243,8 @@ def game(
             raise e
         if __debug__:
             playback.info(f"\n{board_repr(board, action)}\n")
-
+    assert(is_finished(board))
+        
     return winner(board)
 
 
@@ -270,4 +287,11 @@ def turn_info(
     return (
         "========================================================\n"
         + f'TURN: {turn},  PLAYER: {player},  ACTION: {action} (legal={", ".join(str(a) for a in possible_actions)})'
+    )
+
+
+def get_score(board: Board) -> Tuple[int, int]:
+    return (
+        sum(board[AREA0]) + board[MANCALA0],
+        sum(board[AREA1]) + board[MANCALA1],
     )

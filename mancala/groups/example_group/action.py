@@ -8,7 +8,7 @@ We will only use the function action defined in mancala/group/your_group/action.
 import array
 from typing import Tuple
 
-from mancala.game import copy_board, flip_board
+from mancala.game import copy_board, flip_board  # noqa: F401
 
 
 NAME = "The name of your group "
@@ -16,7 +16,7 @@ NAME = "The name of your group "
 
 def action(board: array.array, legal_actions: Tuple[int, ...], player: int) -> int:
     # Your action, do somthing smart.
-    
+
     # Make sure not to change the board.
     # If you need to change it, copy it:
     # board = copy_board(board)

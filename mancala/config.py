@@ -9,7 +9,7 @@ import logging
 
 @dataclass
 class Config:
-    LOG_LEVEL: int = (  # Change to logging.DEBUG to print playback and debug.
+    LOG_LEVEL: int = (  # Change to logging.ERROR to disable debug.
         logging.DEBUG
     )
     PLAYBACK: bool = True
