@@ -42,7 +42,7 @@ def save_nn(w1, b1, w2, b2, trainstep):
     torch.save(b2, 'b2_trained_' + str(trainstep) + '.pth')
 
 
-def learning_action(board: array.array, legal_actions: Tuple[int, ...], player: int) -> int:
+def epsgreedy_action(board: array.array, legal_actions: Tuple[int, ...], player: int) -> int:
     epsilon = 0.1
     xa = np.zeros((len(legal_actions), nx))
 
@@ -51,7 +51,7 @@ def learning_action(board: array.array, legal_actions: Tuple[int, ...], player: 
         s = copy_board(board)
         p = play_turn(s, player, act)
         xa[i,:] = encode(s, p)
-    rateState(board, player)
+    #rateState(board, player)
     x = Variable(torch.tensor(xa.transpose(), dtype=torch.float, device=device))
     h = torch.mm(w1, x) + b1  # matrix-multiply x with input weight w1 and add bias
     h_sigmoid = h.tanh()  # squash this with a sigmoid function
@@ -116,19 +116,19 @@ def train():
     start = time.time()
     while True:
         print("Testing after " + str(1000 * round) + " rounds (" + str((time.time() - start)) + " sec)")
-        testCurrentPlayer(20, learning_action, random_action)
+        testCurrentPlayer(20, epsgreedy_action, random_action, False)
         round +=1
         for i in range(1000):
-            game(learning_action, random_action, True, False)
-        if round % 10 == 0:
-            save_nn(w1, b1, w2, b2, round * 1000)
+            game(epsgreedy_action, epsgreedy_action, True, False)
+        #if round % 10 == 0:
+        #    save_nn(w1, b1, w2, b2, round * 1000)
 
-def testCurrentPlayer(it, play0, play1):
+def testCurrentPlayer(it, play0, play1, doprint):
     p0 = 0
     p1 = 0
     d = 0
     for i in range(it):
-        w = game(play0, play1, False, True)
+        w = game(play0, play1, False, doprint)
         if w == 0:
             p0 += 1
         elif w == 1:
@@ -157,14 +157,21 @@ def onehot_encoding(board, player):
     state.append((board[6] - board[13]) / 48)
     return np.array(state)
 
+def initialize_grads():
+    return (torch.zeros(w1.size(), device=device, dtype=torch.float), torch.zeros(b1.size(), device=device, dtype=torch.float),
+            torch.zeros(w2.size(), device=device, dtype=torch.float), torch.zeros(b2.size(), device=device, dtype=torch.float))
 
+def game_result(w):
+    if w == 0:
+        return 1
+    elif w == 1:
+        return 0
+    else:
+        return 0.5
 def game(
     group0: ActionFunction, group1: ActionFunction, enablelearning: bool, doprint: bool
 ) -> int:
-    Z_w1 = torch.zeros(w1.size(), device=device, dtype=torch.float)
-    Z_b1 = torch.zeros(b1.size(), device=device, dtype=torch.float)
-    Z_w2 = torch.zeros(w2.size(), device=device, dtype=torch.float)
-    Z_b2 = torch.zeros(b2.size(), device=device, dtype=torch.float)
+    (Z_w1, Z_b1, Z_w2, Z_b2) = initialize_grads()
 
     groups = (group0, group1)
     board = initial_board()
@@ -172,39 +179,39 @@ def game(
     turn = 0
     setValueOfLastAction(0.0)
     while not is_finished(board):
-        turn += 1
+        # Assume we are player 0 here - the learning player
+        player = 0
         group = groups[player]
         possible_actions = legal_actions(board, player)
-        action = group(board, possible_actions, player) # use eps-greedy? given the current neural network
-        #current_player = player
+        action = group(board, possible_actions, player)
         encodedBoard = encode(board, player)
-        learningPlayer = False
-        if player == 0:
-            learningPlayer = True
+        previous_p1_board = None
         try:
-            player = play_turn(board, player, action)
+            nextPlayer = play_turn(board, player, action)
             if doprint:
                 print(board_repr(board, action))
-            if is_finished(board):
-                w = winner(board)
-                if w == 0:
-                    target = 1
-                elif w == 1:
-                    target = 0
-                else:
-                    target = 0.5
-                if doprint:
-                    print("Winner was " + str(w))
-            else:
-                if player == 0:
-                    target = value_of_last_action()
-                else:
-                    target = rateState(board, player)
-            # TODO to value updates here if TD(0) or similar
-            if enablelearning:
-                updateDuring(encodedBoard, player, 0.1, 0.9, 0.9, target, Z_w1, Z_b1, Z_w2, Z_b2)
+            turn += 1
         except Exception as e:
             raise e
+        # If nextPlayer is the same (0) then we can immediately update the value function
+        # if not, we need let the opponent make move(s) until it's the learning player's turn again
+        # TODO - play against oneself - learn from both
+        target = None
+        while target is None:
+            if is_finished(board):
+                target = game_result(winner(board))
+            elif nextPlayer == 0:
+                target = rateState(board, player)
+            else:
+                # perform opponent actions until is_finished or player is back to 0
+                possible_actions = legal_actions(board, nextPlayer)
+                action = group(board, possible_actions, nextPlayer)
+                nextPlayer = play_turn(board, nextPlayer, action)
+                if doprint:
+                    print(board_repr(board, action))
+                turn += 1
+        if enablelearning:
+            updateDuring(encodedBoard, 0, 0.1, 0.9, 0.9, target, Z_w1, Z_b1, Z_w2, Z_b2)
 
     # TODO do value updates here if MC or similar
     return winner(board)
