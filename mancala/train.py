@@ -9,6 +9,8 @@ from torch import Tensor
 from torch.autograd import Variable
 
 from mancala.groups.group_random.action import action as random_action
+
+from mancala.groups.example_group.humanplayer import action as human_action
 from mancala.game import initial_board, legal_actions, is_finished, play_turn, winner, ActionFunction, copy_board, board_repr
 
 device = 'cpu'
@@ -31,6 +33,15 @@ def rateState(board, player):
     y = torch.mm(w2, h_sigmoid) + b2  # multiply with the output weights w2 and add bias
     va = y.sigmoid().detach().cpu().numpy().flatten()
     return va[0]
+
+
+def save_nn(w1, b1, w2, b2, trainstep):
+    torch.save(w1, 'w1_trained_' + str(trainstep) + '.pth')
+    torch.save(w2, 'w2_trained_' + str(trainstep) + '.pth')
+    torch.save(b1, 'b1_trained_' + str(trainstep) + '.pth')
+    torch.save(b2, 'b2_trained_' + str(trainstep) + '.pth')
+
+
 def learning_action(board: array.array, legal_actions: Tuple[int, ...], player: int) -> int:
     epsilon = 0.1
     xa = np.zeros((len(legal_actions), nx))
@@ -109,6 +120,8 @@ def train():
         round +=1
         for i in range(1000):
             game(learning_action, random_action, True, False)
+        if round % 10 == 0:
+            save_nn(w1, b1, w2, b2, round * 1000)
 
 def testCurrentPlayer(it, play0, play1):
     p0 = 0
