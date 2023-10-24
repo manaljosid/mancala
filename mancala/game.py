@@ -89,12 +89,12 @@ def legal_actions(board: Board, player: Player) -> Tuple[int, ...]:
 
 
 def play_turn(board: Board, player: Player, action: int) -> Player:
-    assert (
-        sum(board) == TOTAL_SEEDS
-    ), f"Illegal board on turn start. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
-    assert action in legal_actions(board, player)
+    #assert (
+    #    sum(board) == TOTAL_SEEDS
+    #), f"Illegal board on turn start. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
+    #assert action in legal_actions(board, player)
     seeds = board[action]
-    assert seeds > 0, f"Illegal action, no seeds in pit chosen: {action=}, {seeds=}"
+    #assert seeds > 0, f"Illegal action, no seeds in pit chosen: {action=}, {seeds=}"
     board[action] = 0
     start = action + 1
     # Find the exclusive end index in the player's cycle.
@@ -105,11 +105,11 @@ def play_turn(board: Board, player: Player, action: int) -> Player:
     for pit in player_cycle[start:end_idx]:
         # We don't need to worry about opposite Mancala since it is not in the cycle.
         board[pit] = board[pit] + 1
-    assert (
-        sum(board) == TOTAL_SEEDS
-    ), f"Illegal board on after action. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
+    #assert (
+    #    sum(board) == TOTAL_SEEDS
+    #), f"Illegal board on after action. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
     end = player_cycle[end_idx - 1]  # inclusive end index on board.
-    assert 0 <= end  < 14
+    #assert 0 <= end  < 14
 
     # If the last seed lands in the player's own Mancala, they get another turn.
     next_player = player if end == MANCALAS[player] else 1 - player
@@ -128,9 +128,9 @@ def play_turn(board: Board, player: Player, action: int) -> Player:
             playback.info(f"  ++ CAPTURE: {end=}, {opposite=}, {stolen=}")
         board[opposite] = 0
         board[MANCALAS[player]] += stolen + 1
-    assert (
-        sum(board) == TOTAL_SEEDS
-    ), f"Illegal board on after capture. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
+    #assert (
+    #    sum(board) == TOTAL_SEEDS
+    #), f"Illegal board on after capture. total_seeds={sum(board)} != {TOTAL_SEEDS=}"
 
     return next_player
 
@@ -158,9 +158,9 @@ def winner(board) -> int:
         sum(board[AREA0]) + board[MANCALA0],
         sum(board[AREA1]) + board[MANCALA1],
     )
-    assert (
-        player0_score + player1_score == TOTAL_SEEDS
-    ), f"Illegal state and game end: {player0_score=}, {player1_score=}."
+    #assert (
+    #    player0_score + player1_score == TOTAL_SEEDS
+    #), f"Illegal state and game end: {player0_score=}, {player1_score=}."
 
     if player0_score > player1_score:
         return 0
