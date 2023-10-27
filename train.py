@@ -11,7 +11,8 @@ from torch.autograd import Variable
 from mancala.groups.group_random.action import action as random_action
 
 from mancala.groups.example_group.humanplayer import action as human_action
-from mancala.game import initial_board, legal_actions, is_finished, play_turn, winner, ActionFunction, copy_board, board_repr
+from mancala.groups.minmax.action import action as minimax_action
+from mancala.game import initial_board, legal_actions, is_finished, play_turn, winner, ActionFunction, copy_board, board_repr, flip_board
 
 device = 'cpu'
 nh = 10
@@ -35,11 +36,11 @@ def rateState(board, player):
     return va[0]
 
 
-def save_nn(w1, b1, w2, b2, trainstep):
-    torch.save(w1, 'w1_trained_' + str(trainstep) + '.pth')
-    torch.save(w2, 'w2_trained_' + str(trainstep) + '.pth')
-    torch.save(b1, 'b1_trained_' + str(trainstep) + '.pth')
-    torch.save(b2, 'b2_trained_' + str(trainstep) + '.pth')
+def save_nn(w1, b1, w2, b2, trainstep, name = ""):
+    torch.save(w1, 'w1_trained_' + str(name) + "_" + str(trainstep) + '.pth')
+    torch.save(w2, 'w2_trained_' + str(name) + "_" + str(trainstep) + '.pth')
+    torch.save(b1, 'b1_trained_' + str(name) + "_" + str(trainstep) + '.pth')
+    torch.save(b2, 'b2_trained_' + str(name) + "_" + str(trainstep) + '.pth')
 
 
 def epsgreedy_action(board: array.array, legal_actions: Tuple[int, ...], player: int) -> int:
@@ -114,14 +115,23 @@ def train():
     round = 0
     import time
     start = time.time()
+    alpha = 0.001
     while True:
         print("Testing after " + str(1000 * round) + " rounds (" + str((time.time() - start)) + " sec)")
+        print("Test against minimax")
+        testCurrentPlayer(20, epsgreedy_action, minimax_action, False)
+        print("Test against random")
         testCurrentPlayer(20, epsgreedy_action, random_action, False)
         round +=1
+        if round > 100:
+            alpha = 0.0005
         for i in range(1000):
-            game(epsgreedy_action, epsgreedy_action, True, False)
-        #if round % 10 == 0:
-        #    save_nn(w1, b1, w2, b2, round * 1000)
+            # This works pretty well
+            #game(epsgreedy_action, minimax_action, True, False)
+            # But see if selfplay works
+            selfplay(epsgreedy_action, False, alpha)
+        if round % 10 == 0:
+            save_nn(w1, b1, w2, b2, round * 1000, 'selfplay_notaslowalpha')
 
 def testCurrentPlayer(it, play0, play1, doprint):
     p0 = 0
@@ -211,8 +221,41 @@ def game(
                     print(board_repr(board, action))
                 turn += 1
         if enablelearning:
-            updateDuring(encodedBoard, 0, 0.1, 0.9, 0.9, target, Z_w1, Z_b1, Z_w2, Z_b2)
+            updateDuring(encodedBoard, 0, 0.001, 0.9, 0.9, target, Z_w1, Z_b1, Z_w2, Z_b2)
 
+    # TODO do value updates here if MC or similar
+    return winner(board)
+
+def selfplay(
+    group0: ActionFunction, doprint: bool, alpha
+) -> int:
+    (Z_w1, Z_b1, Z_w2, Z_b2) = initialize_grads()
+
+    board = initial_board()
+    player = 0
+    turn = 0
+    setValueOfLastAction(0.0)
+    while not is_finished(board):
+        possible_actions = legal_actions(board, player)
+        action = group0(board, possible_actions, player)
+        encodedBoard = encode(board, player)
+        try:
+            nextPlayer = play_turn(board, player, action)
+            if doprint:
+                print(board_repr(board, action))
+            turn += 1
+        except Exception as e:
+            raise e
+
+        if is_finished(board):
+            target = game_result(winner(board))
+        elif player == nextPlayer:
+            target = rateState(board, player)
+        else:
+            # Flip!
+            board = flip_board(board)
+            target = 1-rateState(board, player)
+        updateDuring(encodedBoard, player, alpha, 0.99, 0.9, target, Z_w1, Z_b1, Z_w2, Z_b2)
     # TODO do value updates here if MC or similar
     return winner(board)
 
